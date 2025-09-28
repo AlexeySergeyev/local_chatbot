@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ollama Chat • {{ model }}</title>
+  <style>
+    :root {
+      font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      color-scheme: light;
+    }
+
+    body {
+      margin: 0;
+      background: #f3f4f6;
+      color: #111827;
+      display: flex;
+      min-height: 100vh;
+      justify-content: center;
+    }
+
+    .wrap {
+      width: min(960px, 100%);
+      padding: clamp(20px, 4vw, 40px);
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    header {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    h1 {
+      font-size: clamp(22px, 4vw, 28px);
+      font-weight: 700;
+      margin: 0;
+      color: #1f2937;
+    }
+
+    .subtle {
+      font-size: 14px;
+      color: #6b7280;
+    }
+
+    .chat {
+      background: #ffffff;
+      border-radius: 16px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      box-shadow: 0 12px 32px -22px rgba(15, 23, 42, 0.6);
+      padding: 18px clamp(16px, 3vw, 22px);
+      height: clamp(420px, 55vh, 620px);
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .msg {
+      border-radius: 14px;
+      padding: 12px 16px;
+      line-height: 1.55;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .msg .role-label {
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 600;
+      color: #9ca3af;
+    }
+
+    .msg .role-content {
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .msg.user {
+      align-self: flex-end;
+      background: linear-gradient(135deg, #bfdbfe 0%, #dbeafe 100%);
+      color: #0f172a;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+
+    .msg.assistant {
+      align-self: flex-start;
+      background: #f8fafc;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+    }
+
+    form {
+      background: rgba(255, 255, 255, 0.8);
+      border-radius: 16px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      padding: 16px;
+      display: flex;
+      gap: 12px;
+      backdrop-filter: blur(6px);
+      box-shadow: 0 12px 32px -22px rgba(15, 23, 42, 0.4);
+    }
+
+    textarea {
+      flex: 1;
+      background: #ffffff;
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font: inherit;
+      resize: vertical;
+      min-height: 72px;
+      color: inherit;
+    }
+
+    textarea:focus {
+      outline: 2px solid rgba(59, 130, 246, 0.45);
+      outline-offset: 2px;
+    }
+
+    button {
+      background: linear-gradient(135deg, #2563eb, #4338ca);
+      color: #ffffff;
+      border: none;
+      border-radius: 12px;
+      padding: 0 22px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: transform 0.08s ease, box-shadow 0.12s ease;
+    }
+
+    button:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 20px -18px rgba(59, 130, 246, 0.8);
+    }
+
+    button:disabled {
+      opacity: 0.55;
+      cursor: default;
+      box-shadow: none;
+    }
+
+    .hint {
+      font-size: 13px;
+      color: #64748b;
+    }
+
+    .footer {
+      font-size: 12px;
+      color: #94a3b8;
+      margin-top: auto;
+    }
+
+    .spinner {
+      display: none;
+      font-size: 14px;
+    }
+
+    @media (max-width: 640px) {
+      .chat {
+        height: 55vh;
+      }
+
+      form {
+        flex-direction: column;
+      }
+
+      button {
+        justify-content: center;
+        padding: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Ollama Chat — {{ model }}</h1>
+      <div class="subtle">Chat with your local large language model in a friendly, light interface.</div>
+    </header>
+
+    <div id="chat" class="chat" aria-live="polite">
+      {% for m in history %}
+        <div class="msg {{ m.role }}" data-role="{{ m.role }}">
+          <span class="role-label">{{ m.role|capitalize }}</span>
+          <span class="role-content">{{ m.content }}</span>
+        </div>
+      {% endfor %}
+    </div>
+
+    <form id="f">
+      <textarea id="q" placeholder="Type your message… (Shift+Enter for newline)"></textarea>
+      <button id="send" type="submit">Send <span id="spin" class="spinner">•••</span></button>
+    </form>
+
+    <div class="hint">Tip: change the model via <code>OLLAMA_MODEL</code>. Currently using <strong>{{ model }}</strong>.</div>
+    <footer class="footer">Powered by Flask + Ollama ({{ ollama_url }})</footer>
+  </div>
+
+  <script>
+    const chat = document.getElementById('chat');
+    const form = document.getElementById('f');
+    const ta = document.getElementById('q');
+    const sendBtn = document.getElementById('send');
+    const spinner = document.getElementById('spin');
+
+    function addBubble(role, content, attach = false) {
+      if (attach && chat.lastElementChild && chat.lastElementChild.dataset.role === role) {
+        const last = chat.lastElementChild.querySelector('.role-content');
+        last.textContent += content;
+        chat.scrollTop = chat.scrollHeight;
+        return chat.lastElementChild;
+      }
+
+      const div = document.createElement('div');
+      div.className = 'msg ' + role;
+      div.dataset.role = role;
+
+      const label = document.createElement('span');
+      label.className = 'role-label';
+      label.textContent = role.charAt(0).toUpperCase() + role.slice(1);
+
+      const body = document.createElement('span');
+      body.className = 'role-content';
+      body.textContent = content;
+
+      div.append(label, body);
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+      return div;
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const text = ta.value.trim();
+      if (!text) return;
+
+      addBubble('user', text);
+      ta.value = '';
+      sendBtn.disabled = true;
+      spinner.style.display = 'inline-flex';
+
+      addBubble('assistant', '');
+
+      try {
+        const res = await fetch('/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ message: text })
+        });
+
+        if (!res.ok || !res.body) throw new Error('Network error');
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          addBubble('assistant', chunk, true);
+        }
+      } catch (err) {
+        addBubble('assistant', '\n[Error] ' + err.message, true);
+      } finally {
+        sendBtn.disabled = false;
+        spinner.style.display = 'none';
+      }
+    });
+
+    ta.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        form.requestSubmit();
+      }
+    });
+  </script>
+</body>
+</html>
