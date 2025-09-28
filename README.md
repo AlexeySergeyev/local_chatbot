@@ -2,7 +2,7 @@
 
 A lightweight Flask app for chatting with a local Ollama large language model. The UI streams responses as they arrive and keeps the full back-and-forth history for the current browser session.
 
-<img src="screenshot.png" alt="Screenshot" width="400"/>
+<img src="Screenshot.png" alt="Screenshot" width="400"/>
 
 ## Features
 
