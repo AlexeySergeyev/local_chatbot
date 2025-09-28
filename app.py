@@ -3,11 +3,31 @@ import requests
 import json
 import os
 import uuid
+from datetime import datetime, timezone
 from threading import Lock
 
 # ---- Config ----
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return default
+
+
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 MODEL_NAME = os.environ.get("OLLAMA_MODEL", "llama3.2:3b")  # change to your preferred model
+CONNECT_TIMEOUT = _env_float("OLLAMA_CONNECT_TIMEOUT", 10.0)
+READ_TIMEOUT = _env_float("OLLAMA_READ_TIMEOUT", 300.0)
+REQUEST_TIMEOUT = (CONNECT_TIMEOUT, READ_TIMEOUT)
+
+
+def current_timestamp() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "").replace("T", " ")
 # ----------------
 
 app = Flask(__name__)
@@ -60,18 +80,26 @@ def chat():
 
     history = list(get_history())
     # Ollama expects messages like [{"role":"user","content":"..."}, {"role":"assistant","content":"..."}...]
-    messages = history + [{"role": "user", "content": user_msg}]
+    ollama_messages = [{"role": item["role"], "content": item["content"]} for item in history]
+    ollama_messages.append({"role": "user", "content": user_msg})
+
+    user_timestamp = current_timestamp()
 
     url = f"{OLLAMA_URL}/api/chat"
     payload = {
         "model": MODEL_NAME,
-        "messages": messages,
+        "messages": ollama_messages,
         "stream": True
     }
     assistant_text = []
 
     def iter_tokens():
-        with requests.post(url, json=payload, stream=True) as r:
+        with requests.post(
+            url,
+            json=payload,
+            stream=True,
+            timeout=REQUEST_TIMEOUT,
+        ) as r:
             r.raise_for_status()
             for line in r.iter_lines(decode_unicode=True):
                 if not line:
@@ -92,8 +120,16 @@ def chat():
 
     def finalize_history():
         assistant_full = "".join(assistant_text)
-        history.append({"role": "user", "content": user_msg})
-        history.append({"role": "assistant", "content": assistant_full})
+        history.append({
+            "role": "user",
+            "content": user_msg,
+            "timestamp": user_timestamp,
+        })
+        history.append({
+            "role": "assistant",
+            "content": assistant_full,
+            "timestamp": current_timestamp(),
+        })
         set_history(history)
         return assistant_full
 

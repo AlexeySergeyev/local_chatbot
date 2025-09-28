@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from app import app, conversation_store, conversation_lock
+from app import app, conversation_store, conversation_lock, REQUEST_TIMEOUT
 
 
 class FakeResponse:
@@ -48,10 +48,24 @@ class ChatStreamTest(unittest.TestCase):
             json.dumps({"done": True}),
         ]
 
-        with patch("app.requests.post", return_value=FakeResponse(lines)):
+        timestamps = [
+            "2025-01-01 00:00:00",
+            "2025-01-01 00:00:01",
+        ]
+
+        with patch("app.requests.post", return_value=FakeResponse(lines)) as mock_post, patch(
+            "app.current_timestamp",
+            side_effect=timestamps,
+        ):
             resp = self.client.post("/chat", json={"message": "Hi"})
             self.assertEqual(resp.status_code, 200)
             self.assertEqual(resp.data.decode(), "Hello world")
+            mock_post.assert_called_once()
+            _, kwargs = mock_post.call_args
+            self.assertEqual(kwargs.get("timeout"), REQUEST_TIMEOUT)
+            payload_messages = kwargs.get("json", {}).get("messages", [])
+            for message in payload_messages:
+                self.assertNotIn("timestamp", message)
 
         with conversation_lock:
             history = conversation_store.get("test-conv")
@@ -61,6 +75,8 @@ class ChatStreamTest(unittest.TestCase):
         self.assertEqual(len(history), 2)
         self.assertEqual(history[0]["content"], "Hi")
         self.assertEqual(history[1]["content"], "Hello world")
+        self.assertEqual(history[0]["timestamp"], timestamps[0])
+        self.assertEqual(history[1]["timestamp"], timestamps[1])
 
 
 if __name__ == "__main__":

@@ -12,6 +12,7 @@ A lightweight Flask app for chatting with a local Ollama large language model. T
 - 🧠 **Conversation memory** – stores each user/assistant turn for the active session so the model stays in context.
 - 🎛️ **Configurable model & endpoint** – point at any Ollama instance and model via environment variables.
 - 🧪 **Smoke-tested** – includes a unit test to ensure conversation history persists correctly.
+- ⏱️ **Timestamped messages** – every message header includes the time it was sent.
 
 ## Prerequisites
 
@@ -43,12 +44,16 @@ By default the app binds to `http://127.0.0.1:5000`.
 | `OLLAMA_URL` | `http://localhost:11434` | Base URL of your Ollama server. |
 | `OLLAMA_MODEL` | `llama3.2:3b` | Name of the model to chat with. |
 | `FLASK_SECRET_KEY` | `change-me` | Secret key for session cookies (set a strong value in production). |
+| `OLLAMA_CONNECT_TIMEOUT` | `10.0` | Seconds to wait when establishing the HTTP connection to Ollama. |
+| `OLLAMA_READ_TIMEOUT` | `300.0` | Seconds to wait for streaming tokens before aborting the request. |
 
 You can export any of these before launching the app:
 
 ```bash
 export OLLAMA_MODEL="llama3.1:8b"
 export FLASK_SECRET_KEY="$(openssl rand -hex 32)"
+export OLLAMA_CONNECT_TIMEOUT=5
+export OLLAMA_READ_TIMEOUT=120
 python app.py
 ```
 

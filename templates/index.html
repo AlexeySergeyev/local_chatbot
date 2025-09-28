@@ -67,12 +67,29 @@
       gap: 6px;
     }
 
+    .role-header {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+
     .msg .role-label {
       font-size: 12px;
       letter-spacing: 0.08em;
       text-transform: uppercase;
       font-weight: 600;
       color: #9ca3af;
+    }
+
+    .role-time {
+      font-size: 12px;
+      color: #9ca3af;
+      letter-spacing: 0.02em;
+      text-transform: none;
+    }
+
+    .role-time:empty {
+      display: none;
     }
 
     .msg .role-content {
@@ -187,8 +204,11 @@
 
     <div id="chat" class="chat" aria-live="polite">
       {% for m in history %}
-        <div class="msg {{ m.role }}" data-role="{{ m.role }}">
-          <span class="role-label">{{ m.role|capitalize }}</span>
+        <div class="msg {{ m.role }}" data-role="{{ m.role }}" data-timestamp="{{ m.timestamp or '' }}">
+          <div class="role-header">
+            <span class="role-label">{{ m.role|capitalize }}</span>
+            <span class="role-time">{{ m.timestamp or '' }}</span>
+          </div>
           <span class="role-content">{{ m.content }}</span>
         </div>
       {% endfor %}
@@ -210,27 +230,51 @@
     const sendBtn = document.getElementById('send');
     const spinner = document.getElementById('spin');
 
-    function addBubble(role, content, attach = false) {
+    function setBubbleTimestamp(bubble, timestamp) {
+      if (!bubble) return;
+      bubble.dataset.timestamp = timestamp || '';
+      const timeEl = bubble.querySelector('.role-time');
+      if (timeEl) {
+        timeEl.textContent = timestamp || '';
+      }
+    }
+
+    function addBubble(role, content, attach = false, timestamp = null) {
       if (attach && chat.lastElementChild && chat.lastElementChild.dataset.role === role) {
-        const last = chat.lastElementChild.querySelector('.role-content');
+        const bubble = chat.lastElementChild;
+        const last = bubble.querySelector('.role-content');
         last.textContent += content;
+        if (timestamp) {
+          setBubbleTimestamp(bubble, timestamp);
+        }
         chat.scrollTop = chat.scrollHeight;
-        return chat.lastElementChild;
+        return bubble;
       }
 
       const div = document.createElement('div');
       div.className = 'msg ' + role;
       div.dataset.role = role;
+      if (timestamp) {
+        div.dataset.timestamp = timestamp;
+      }
+
+      const header = document.createElement('div');
+      header.className = 'role-header';
 
       const label = document.createElement('span');
       label.className = 'role-label';
       label.textContent = role.charAt(0).toUpperCase() + role.slice(1);
 
+      const timeEl = document.createElement('span');
+      timeEl.className = 'role-time';
+      timeEl.textContent = timestamp || '';
+
       const body = document.createElement('span');
       body.className = 'role-content';
       body.textContent = content;
 
-      div.append(label, body);
+      header.append(label, timeEl);
+      div.append(header, body);
       chat.appendChild(div);
       chat.scrollTop = chat.scrollHeight;
       return div;
@@ -241,12 +285,13 @@
       const text = ta.value.trim();
       if (!text) return;
 
-      addBubble('user', text);
+      const userTs = new Date().toISOString();
+      addBubble('user', text, false, userTs);
       ta.value = '';
       sendBtn.disabled = true;
       spinner.style.display = 'inline-flex';
 
-      addBubble('assistant', '');
+      let assistantBubble = addBubble('assistant', '', false, new Date().toISOString());
 
       try {
         const res = await fetch('/chat', {
@@ -265,10 +310,12 @@
           const { value, done } = await reader.read();
           if (done) break;
           const chunk = decoder.decode(value, { stream: true });
-          addBubble('assistant', chunk, true);
+          assistantBubble = addBubble('assistant', chunk, true);
         }
+
+        setBubbleTimestamp(assistantBubble, new Date().toISOString());
       } catch (err) {
-        addBubble('assistant', '\n[Error] ' + err.message, true);
+        assistantBubble = addBubble('assistant', '\n[Error] ' + err.message, true, new Date().toISOString());
       } finally {
         sendBtn.disabled = false;
         spinner.style.display = 'none';
