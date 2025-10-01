@@ -199,7 +199,7 @@
   <div class="wrap">
     <header>
       <h1>Ollama Chat — {{ model }}</h1>
-      <div class="subtle">Chat with your local large language model in a friendly, light interface.</div>
+      <div class="subtle">Chat with your local large language model.</div>
     </header>
 
     <div id="chat" class="chat" aria-live="polite">
@@ -230,22 +230,55 @@
     const sendBtn = document.getElementById('send');
     const spinner = document.getElementById('spin');
 
+    function formatTimestamp(value) {
+      if (!value) return '';
+
+      let date;
+      if (value instanceof Date) {
+        date = value;
+      } else if (typeof value === 'number') {
+        date = new Date(value);
+      } else if (typeof value === 'string') {
+        const normalized = value.includes('T') ? value : value.replace(' ', 'T');
+        date = new Date(normalized);
+        if (Number.isNaN(date.getTime())) {
+          return value;
+        }
+      } else {
+        return '';
+      }
+
+      const pad = (num, width = 2) => String(num).padStart(width, '0');
+      const padMs = (num) => String(num).padStart(3, '0');
+
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
+        `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.${padMs(date.getMilliseconds())}`;
+    }
+
+    document.querySelectorAll('.msg').forEach((bubble) => {
+      if (bubble.dataset.timestamp) {
+        setBubbleTimestamp(bubble, bubble.dataset.timestamp);
+      }
+    });
+
     function setBubbleTimestamp(bubble, timestamp) {
       if (!bubble) return;
-      bubble.dataset.timestamp = timestamp || '';
+      const formatted = formatTimestamp(timestamp);
+      bubble.dataset.timestamp = formatted || '';
       const timeEl = bubble.querySelector('.role-time');
       if (timeEl) {
-        timeEl.textContent = timestamp || '';
+        timeEl.textContent = formatted || '';
       }
     }
 
     function addBubble(role, content, attach = false, timestamp = null) {
+      const formattedTs = formatTimestamp(timestamp);
       if (attach && chat.lastElementChild && chat.lastElementChild.dataset.role === role) {
         const bubble = chat.lastElementChild;
         const last = bubble.querySelector('.role-content');
         last.textContent += content;
-        if (timestamp) {
-          setBubbleTimestamp(bubble, timestamp);
+        if (formattedTs) {
+          setBubbleTimestamp(bubble, formattedTs);
         }
         chat.scrollTop = chat.scrollHeight;
         return bubble;
@@ -254,8 +287,8 @@
       const div = document.createElement('div');
       div.className = 'msg ' + role;
       div.dataset.role = role;
-      if (timestamp) {
-        div.dataset.timestamp = timestamp;
+      if (formattedTs) {
+        div.dataset.timestamp = formattedTs;
       }
 
       const header = document.createElement('div');
@@ -267,7 +300,7 @@
 
       const timeEl = document.createElement('span');
       timeEl.className = 'role-time';
-      timeEl.textContent = timestamp || '';
+      timeEl.textContent = formattedTs || '';
 
       const body = document.createElement('span');
       body.className = 'role-content';
@@ -285,13 +318,13 @@
       const text = ta.value.trim();
       if (!text) return;
 
-      const userTs = new Date().toISOString();
+      const userTs = new Date();
       addBubble('user', text, false, userTs);
       ta.value = '';
       sendBtn.disabled = true;
       spinner.style.display = 'inline-flex';
 
-      let assistantBubble = addBubble('assistant', '', false, new Date().toISOString());
+      let assistantBubble = addBubble('assistant', '', false, new Date());
 
       try {
         const res = await fetch('/chat', {
@@ -313,9 +346,9 @@
           assistantBubble = addBubble('assistant', chunk, true);
         }
 
-        setBubbleTimestamp(assistantBubble, new Date().toISOString());
+        setBubbleTimestamp(assistantBubble, new Date());
       } catch (err) {
-        assistantBubble = addBubble('assistant', '\n[Error] ' + err.message, true, new Date().toISOString());
+        assistantBubble = addBubble('assistant', '\n[Error] ' + err.message, true, new Date());
       } finally {
         sendBtn.disabled = false;
         spinner.style.display = 'none';

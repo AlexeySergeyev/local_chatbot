@@ -22,16 +22,22 @@ A lightweight Flask app for chatting with a local Ollama large language model. T
 ## Quick start
 
 ```bash
+# 0. Create a virtual environment if you don't want to use the bundled one
+python3 -m venv .venv
+
 # 1. Activate the bundled virtual environment (or create your own if needed)
 source .venv/bin/activate
 
 # 2. Install dependencies
 pip install -r requirements.txt
 
-# 3. Ensure Ollama is running
+# 3. Copy the example environment file and edit values if needed (optional)
+cp .env.example .env
+
+# 4. Ensure Ollama is running
 ollama serve  # runs in the background; leave it running
 
-# 4. Launch the Flask app
+# 5. Launch the Flask app
 python app.py
 ```
 
@@ -39,15 +45,26 @@ By default the app binds to `http://127.0.0.1:5000`.
 
 ### Environment variables
 
+Configuration values are read from both the process environment and a local `.env` file. The project ships with `.env.example`; copy it to `.env` and adjust the values to your setup. Entries in `.env` follow the standard `KEY=value` syntax and are automatically loaded at startup.
+
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `OLLAMA_URL` | `http://localhost:11434` | Base URL of your Ollama server. |
-| `OLLAMA_MODEL` | `llama3.2:3b` | Name of the model to chat with. |
+| `OLLAMA_MODEL` | `mistral:latest` | Name of the model to chat with. |
 | `FLASK_SECRET_KEY` | `change-me` | Secret key for session cookies (set a strong value in production). |
 | `OLLAMA_CONNECT_TIMEOUT` | `10.0` | Seconds to wait when establishing the HTTP connection to Ollama. |
 | `OLLAMA_READ_TIMEOUT` | `300.0` | Seconds to wait for streaming tokens before aborting the request. |
 
-You can export any of these before launching the app:
+You can either export these variables or set them in `.env` before launching the app:
+
+```ini
+# .env
+OLLAMA_URL=http://localhost:11434
+OLLAMA_MODEL=mistral:latest
+FLASK_SECRET_KEY=change-me
+OLLAMA_CONNECT_TIMEOUT=10.0
+OLLAMA_READ_TIMEOUT=300.0
+```
 
 ```bash
 export OLLAMA_MODEL="llama3.1:8b"

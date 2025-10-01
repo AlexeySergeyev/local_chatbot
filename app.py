@@ -1,16 +1,26 @@
-from flask import Flask, render_template, request, Response, session, stream_with_context
+from flask import (  # pyright: ignore[reportMissingImports]
+    Flask,
+    render_template,
+    request,
+    Response,
+    session,
+    stream_with_context,
+)
 import requests
 import json
 import os
 import uuid
 from datetime import datetime, timezone
 from threading import Lock
+from dotenv import load_dotenv  # pyright: ignore[reportMissingImports]
 
 # ---- Config ----
 
+load_dotenv()
+
 
 def _env_float(name: str, default: float) -> float:
-    raw = os.environ.get(name)
+    raw = os.getenv(name)
     if raw is None:
         return default
     try:
@@ -19,19 +29,26 @@ def _env_float(name: str, default: float) -> float:
         return default
 
 
-OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
-MODEL_NAME = os.environ.get("OLLAMA_MODEL", "llama3.2:3b")  # change to your preferred model
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+MODEL_NAME = os.getenv("OLLAMA_MODEL", "mistral:latest")
+
+# Timeouts for requests to Ollama
 CONNECT_TIMEOUT = _env_float("OLLAMA_CONNECT_TIMEOUT", 10.0)
 READ_TIMEOUT = _env_float("OLLAMA_READ_TIMEOUT", 300.0)
 REQUEST_TIMEOUT = (CONNECT_TIMEOUT, READ_TIMEOUT)
 
 
 def current_timestamp() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "").replace("T", " ")
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    return now.isoformat(timespec="milliseconds", sep=" ")
+
+
 # ----------------
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET_KEY", "change-me")  # set a real secret in prod
+app.secret_key = os.environ.get(
+    "FLASK_SECRET_KEY", "change-me"
+)  # set a real secret in prod
 
 conversation_store = {}
 conversation_lock = Lock()
@@ -58,10 +75,14 @@ def set_history(history):
         conversation_store[conv_id] = [dict(item) for item in history]
     session.modified = True
 
+
 @app.route("/", methods=["GET"])
 def index():
     history = get_history()
-    return render_template("index.html", history=history, model=MODEL_NAME, ollama_url=OLLAMA_URL)
+    return render_template(
+        "index.html", history=history, model=MODEL_NAME, ollama_url=OLLAMA_URL
+    )
+
 
 @app.route("/reset", methods=["POST"])
 def reset():
@@ -70,6 +91,7 @@ def reset():
         with conversation_lock:
             conversation_store.pop(conv_id, None)
     return ("", 204)
+
 
 @app.route("/chat", methods=["POST"])
 def chat():
@@ -80,17 +102,15 @@ def chat():
 
     history = list(get_history())
     # Ollama expects messages like [{"role":"user","content":"..."}, {"role":"assistant","content":"..."}...]
-    ollama_messages = [{"role": item["role"], "content": item["content"]} for item in history]
+    ollama_messages = [
+        {"role": item["role"], "content": item["content"]} for item in history
+    ]
     ollama_messages.append({"role": "user", "content": user_msg})
 
     user_timestamp = current_timestamp()
 
     url = f"{OLLAMA_URL}/api/chat"
-    payload = {
-        "model": MODEL_NAME,
-        "messages": ollama_messages,
-        "stream": True
-    }
+    payload = {"model": MODEL_NAME, "messages": ollama_messages, "stream": True}
     assistant_text = []
 
     def iter_tokens():
@@ -120,16 +140,20 @@ def chat():
 
     def finalize_history():
         assistant_full = "".join(assistant_text)
-        history.append({
-            "role": "user",
-            "content": user_msg,
-            "timestamp": user_timestamp,
-        })
-        history.append({
-            "role": "assistant",
-            "content": assistant_full,
-            "timestamp": current_timestamp(),
-        })
+        history.append(
+            {
+                "role": "user",
+                "content": user_msg,
+                "timestamp": user_timestamp,
+            }
+        )
+        history.append(
+            {
+                "role": "assistant",
+                "content": assistant_full,
+                "timestamp": current_timestamp(),
+            }
+        )
         set_history(history)
         return assistant_full
 
@@ -145,6 +169,7 @@ def chat():
         finalize_history()
 
     return Response(stream_with_context(stream()), mimetype="text/plain; charset=utf-8")
+
 
 if __name__ == "__main__":
     # First run will auto-pull the model when Ollama sees it
